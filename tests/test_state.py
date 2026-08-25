@@ -1,3 +1,5 @@
+# ruff: noqa: ANN201, E501
+
 from langgraph_agent_lab.scenarios import load_scenarios
 from langgraph_agent_lab.state import Route, Scenario, initial_state
 

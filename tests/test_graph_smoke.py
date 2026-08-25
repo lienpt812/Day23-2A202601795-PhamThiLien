@@ -7,6 +7,8 @@ Note: These tests require a configured LLM (OPENAI_API_KEY or ANTHROPIC_API_KEY)
 because classify_node and answer_node use real LLM calls.
 """
 
+# ruff: noqa: ANN001, ANN201, E402, E501
+
 import importlib.util
 import os
 

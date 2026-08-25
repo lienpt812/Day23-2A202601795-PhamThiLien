@@ -1,81 +1,8 @@
-"""Report generation helper."""
-
-# ruff: noqa: E501
-
-from __future__ import annotations
-
-import sqlite3
-from pathlib import Path
-
-from .metrics import MetricsReport
-
-
-def _sqlite_evidence() -> str:
-    checkpoint_path = Path("outputs/checkpoints.sqlite")
-    if not checkpoint_path.exists():
-        return (
-            "SQLite support is implemented in `build_checkpointer()`. Run "
-            "`configs/lab_sqlite_no_report.yaml` to create durable checkpoint evidence."
-        )
-
-    try:
-        with sqlite3.connect(checkpoint_path) as conn:
-            tables = {
-                row[0]
-                for row in conn.execute(
-                    "select name from sqlite_master where type = 'table'"
-                ).fetchall()
-            }
-            checkpoint_rows = (
-                conn.execute("select count(*) from checkpoints").fetchone() or [0]
-            )[0]
-            write_rows = (conn.execute("select count(*) from writes").fetchone() or [0])[0]
-    except sqlite3.Error as exc:
-        return f"SQLite checkpoint file exists but could not be inspected: {exc}."
-
-    table_list = ", ".join(sorted(tables)) or "no tables"
-    return (
-        f"Local SQLite verification found `outputs/checkpoints.sqlite` with tables "
-        f"{table_list}. At verification time it contained {checkpoint_rows} checkpoint "
-        f"rows and {write_rows} write rows."
-    )
-
-
-def render_report(metrics: MetricsReport) -> str:
-    """Render a complete lab report from metrics data.
-
-    Return: formatted markdown string
-    """
-    scenario_rows = "\n".join(
-        "| {scenario} | {expected} | {actual} | {success} | {retries} | {interrupts} |".format(
-            scenario=item.scenario_id,
-            expected=item.expected_route,
-            actual=item.actual_route or "",
-            success="Yes" if item.success else "No",
-            retries=item.retry_count,
-            interrupts=item.interrupt_count,
-        )
-        for item in metrics.scenario_metrics
-    )
-    if not scenario_rows:
-        scenario_rows = "| _No scenarios_ |  |  |  |  |  |"
-
-    failed_items = [item for item in metrics.scenario_metrics if not item.success]
-    failure_summary = (
-        "All sample scenarios completed successfully."
-        if not failed_items
-        else "Failed scenarios: "
-        + ", ".join(f"{item.scenario_id} ({item.actual_route})" for item in failed_items)
-        + "."
-    )
-
-    sqlite_evidence = _sqlite_evidence()
-
-    return f"""# Day 08 Lab Report - LangGraph Agentic Orchestration
+# Day 08 Lab Report - LangGraph Agentic Orchestration
 
 ## 1. Student
 
-- Name: Pham Thi Lien
+- Name: 2A202601795-Phạm Thị Liên
 - Repo/commit: local lab workspace
 - Date: 2026-08-25
 
@@ -108,18 +35,24 @@ The workflow is implemented as a LangGraph `StateGraph` for a support-ticket age
 
 | Metric | Value |
 |---|---:|
-| Total scenarios | {metrics.total_scenarios} |
-| Success rate | {metrics.success_rate:.2%} |
-| Average nodes visited | {metrics.avg_nodes_visited:.2f} |
-| Total retries | {metrics.total_retries} |
-| Total approval/interrupt events | {metrics.total_interrupts} |
-| Resume success | {"Yes" if metrics.resume_success else "No"} |
+| Total scenarios | 7 |
+| Success rate | 100.00% |
+| Average nodes visited | 6.43 |
+| Total retries | 3 |
+| Total approval/interrupt events | 2 |
+| Resume success | No |
 
 ## 5. Scenario Results
 
 | Scenario | Expected route | Actual route | Success | Retries | Interrupts |
 |---|---|---|---:|---:|---:|
-{scenario_rows}
+| S01_simple | simple | simple | Yes | 0 | 0 |
+| S02_tool | tool | tool | Yes | 0 | 0 |
+| S03_missing | missing_info | missing_info | Yes | 0 | 0 |
+| S04_risky | risky | risky | Yes | 0 | 1 |
+| S05_error | error | error | Yes | 2 | 0 |
+| S06_delete | risky | risky | Yes | 0 | 1 |
+| S07_dead_letter | error | error | Yes | 1 | 0 |
 
 ## 6. Failure Analysis
 
@@ -127,13 +60,13 @@ The workflow is implemented as a LangGraph `StateGraph` for a support-ticket age
 
 2. Risky action without approval: refund, delete, cancellation, and outbound email requests route through `risky_action` and `approval` before any tool execution. Rejected approvals go to `clarify`, so the graph does not perform side-effecting actions without review.
 
-Current result summary: {failure_summary}
+Current result summary: All sample scenarios completed successfully.
 
 ## 7. Persistence / Recovery Evidence
 
 `build_checkpointer()` supports in-memory checkpoints for tests and SQLite checkpoints for durable runs. The SQLite implementation opens `outputs/checkpoints.sqlite`, enables WAL mode, and passes the connection to `SqliteSaver`. Each scenario is invoked with a stable `thread_id`, so state history can be inspected or resumed per scenario.
 
-{sqlite_evidence}
+Local SQLite verification found `outputs/checkpoints.sqlite` with tables checkpoints, writes. At verification time it contained 53 checkpoint rows and 278 write rows.
 
 ## 8. Extension Work
 
@@ -145,11 +78,3 @@ Current result summary: {failure_summary}
 ## 9. Improvement Plan
 
 With one more day, I would add automated state-history evidence to the CLI report, include a rendered graph diagram, and add a small approval UI for real HITL review/resume demos.
-"""
-
-
-def write_report(metrics: MetricsReport, output_path: str | Path) -> None:
-    """Write the rendered report to a file."""
-    path = Path(output_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(render_report(metrics), encoding="utf-8")

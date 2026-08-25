@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from .state import AgentState
 
-
 CLASSIFY_ROUTE_MAP = {
     "simple": "answer",
     "tool": "tool",

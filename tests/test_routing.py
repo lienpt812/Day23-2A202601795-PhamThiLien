@@ -4,7 +4,7 @@ These tests verify correct routing logic. They will fail with NotImplementedErro
 until you implement the routing functions in routing.py.
 """
 
-import pytest
+# ruff: noqa: ANN201
 
 from langgraph_agent_lab.routing import (
     route_after_approval,
